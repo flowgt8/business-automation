@@ -77,8 +77,7 @@ class DigisellerAPI:
     
     def _get_seller_id(self) -> str:
         """Extract seller ID from API key or config"""
-        # TODO: Get actual seller ID from user or API
-        return "SELLER_ID_NEEDED"
+        return os.getenv('PLATI_SELLER_ID', '1179730')
 
 
 class InventoryMonitor:
@@ -174,6 +173,7 @@ class CompetitorTracker:
 def main():
     """Main execution"""
     api_key = os.getenv('DIGISELLER_API_KEY', '9E0158D50BB2430D978F4707E3329153')
+    seller_id = os.getenv('PLATI_SELLER_ID', '1179730')
     
     api = DigisellerAPI(api_key)
     monitor = InventoryMonitor(api)
