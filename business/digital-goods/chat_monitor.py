@@ -29,6 +29,7 @@ STATE_FILE = "/root/.openclaw/workspace/business/digital-goods/chat_state.json"
 LOG_FILE = "/tmp/chat_monitor.log"
 
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
+API_TIMEOUT = 30  # Increased from 10 to 30 seconds
 
 def log(msg):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -64,7 +65,7 @@ def get_token():
     url = "https://api.digiseller.com/api/apilogin"
     payload = {"seller_id": SELLER_ID, "timestamp": int(timestamp), "sign": sign}
     try:
-        r = requests.post(url, json=payload, headers=HEADERS, timeout=10)
+        r = requests.post(url, json=payload, headers=HEADERS, timeout=API_TIMEOUT)
         if r.json().get("retval") == 0:
             return r.json().get("token")
     except Exception as e:
@@ -75,7 +76,7 @@ def get_all_chats(token):
     """Get ALL chats (not just unread)"""
     url = f"https://api.digiseller.com/api/debates/v2/chats?token={token}"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=API_TIMEOUT)
         return r.json().get("chats", [])
     except Exception as e:
         log(f"Fetch error: {e}")
@@ -85,7 +86,7 @@ def get_chat_messages(token, invoice_id):
     """Get all messages for a specific chat"""
     url = f"https://api.digiseller.com/api/debates/v2?token={token}&id_i={invoice_id}"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        r = requests.get(url, headers=HEADERS, timeout=API_TIMEOUT)
         result = r.json()
         return result if isinstance(result, list) else []
     except Exception as e:
@@ -117,9 +118,9 @@ def send_reply(token, invoice_id, text):
     url = f"https://api.digiseller.com/api/debates/v2/?token={token}&id_i={invoice_id}"
     payload = {"message": text}
     try:
-        r = requests.post(url, json=payload, headers=HEADERS, timeout=10)
+        r = requests.post(url, json=payload, headers=HEADERS, timeout=API_TIMEOUT)
         # Mark as read
-        requests.post(f"https://api.digiseller.com/api/debates/v2/seen?token={token}&id_i={invoice_id}", headers=HEADERS)
+        requests.post(f"https://api.digiseller.com/api/debates/v2/seen?token={token}&id_i={invoice_id}", headers=HEADERS, timeout=API_TIMEOUT)
         return r.status_code == 200
     except Exception as e:
         log(f"Send error: {e}")
