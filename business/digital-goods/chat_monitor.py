@@ -48,6 +48,16 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
+def get_processed_messages(state):
+    """Get set of processed message IDs (invoice_msgid format)"""
+    return set(state.get("processed_messages", []))
+
+def mark_message_processed(state, invoice_id, message_id):
+    """Mark a specific message as processed"""
+    if "processed_messages" not in state:
+        state["processed_messages"] = []
+    state["processed_messages"].append(f"{invoice_id}_{message_id}")
+
 def get_token():
     timestamp = str(int(time.time()))
     sign = hashlib.sha256((API_KEY + timestamp).encode('utf-8')).hexdigest()
@@ -117,8 +127,10 @@ def send_reply(token, invoice_id, text):
 
 def check_chats():
     """Main monitoring function - checks for new chats and queues them"""
-    state = load_json(STATE_FILE, {"processed": [], "away_mode": False})
+    state = load_json(STATE_FILE, {"processed": [], "processed_messages": [], "auto_delivered_orders": [], "away_mode": False})
     queue = load_json(QUEUE_FILE, {"pending": [], "auto_delivered": []})
+    processed_msgs = get_processed_messages(state)
+    auto_delivered_orders = set(state.get("auto_delivered_orders", []))
     
     token = get_token()
     if not token:
@@ -142,52 +154,63 @@ def check_chats():
         product = chat.get("product", "")
         email = chat.get("email", "")
         
-        # Skip if already processed
-        if invoice in state["processed"]:
-            continue
-        
         # Get messages for this chat
         messages = get_chat_messages(token, invoice)
         
-        # Check if there are unread messages from buyer
-        if not has_unread_buyer_messages(messages):
-            continue  # No new messages from buyer, skip
+        # Get unread messages from buyer that we haven't processed yet
+        unread_msgs = [m for m in messages if m.get("buyer") == 1 and m.get("date_seen") is None]
+        new_unread = [m for m in unread_msgs if f"{invoice}_{m.get('id')}" not in processed_msgs]
+        
+        if not new_unread:
+            continue  # No new unread messages, skip
         
         needs_attention_count += 1
         
-        # Get the actual message content
-        last_message = get_last_buyer_message(messages)
+        # Get the most recent new message
+        last_msg = new_unread[-1]
+        last_message_text = last_msg.get("message", "")
+        last_message_id = last_msg.get("id")
         
         item = {
             "invoice": invoice,
             "product": product,
             "email": email,
-            "message": last_message,
+            "message": last_message_text,
+            "message_id": last_message_id,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "requires_attention": True
         }
         
         # Check if auto-delivery product
         is_auto = any(auto in product for auto in AUTO_PRODUCTS)
+        already_delivered = invoice in auto_delivered_orders
         
-        if is_auto:
-            # Auto-deliver immediately
+        if is_auto and not already_delivered:
+            # First message - auto-deliver immediately
             log(f"⚡️ Auto-delivering to #{invoice} ({product[:50]}...)")
             if send_reply(token, invoice, DELIVERY_MSG):
                 item["auto_delivered"] = True
                 item["requires_attention"] = False
                 queue["auto_delivered"].append(item)
-                state["processed"].append(invoice)
+                mark_message_processed(state, invoice, last_message_id)
+                # Track that we've auto-delivered to this order
+                if "auto_delivered_orders" not in state:
+                    state["auto_delivered_orders"] = []
+                state["auto_delivered_orders"].append(invoice)
                 log(f"✅ Auto-delivered to #{invoice}")
             else:
                 log(f"❌ Auto-delivery failed for #{invoice}")
                 new_items.append(item)
+        elif is_auto and already_delivered:
+            # Already delivered once - now needs human attention
+            log(f"🔔 #{invoice} has follow-up question (already auto-delivered)")
+            new_items.append(item)
         elif state.get("away_mode", False):
             # Away mode - send auto-reply
             log(f"🌙 Away mode reply to #{invoice}")
             if send_reply(token, invoice, AWAY_MSG):
                 item["away_reply_sent"] = True
-                state["processed"].append(invoice)
+                mark_message_processed(state, invoice, last_message_id)
                 log(f"✅ Away reply sent to #{invoice}")
             else:
                 new_items.append(item)
@@ -236,7 +259,7 @@ def get_pending_chats():
 
 def reply_to_chat(invoice_id, message):
     """Send a reply to a specific chat"""
-    state = load_json(STATE_FILE, {"processed": [], "away_mode": False})
+    state = load_json(STATE_FILE, {"processed": [], "processed_messages": [], "away_mode": False})
     queue = load_json(QUEUE_FILE, {"pending": [], "auto_delivered": []})
     
     token = get_token()
@@ -244,8 +267,16 @@ def reply_to_chat(invoice_id, message):
         return False, "Authentication failed"
     
     if send_reply(token, invoice_id, message):
-        # Mark as processed
-        state["processed"].append(invoice_id)
+        # Mark the message as processed
+        pending_chat = None
+        for c in queue["pending"]:
+            if c["invoice"] == invoice_id:
+                pending_chat = c
+                break
+        
+        if pending_chat and "message_id" in pending_chat:
+            mark_message_processed(state, invoice_id, pending_chat["message_id"])
+        
         # Remove from pending
         queue["pending"] = [c for c in queue["pending"] if c["invoice"] != invoice_id]
         
