@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-OpenClaw Integrated Chat Monitor
-Runs as background service, notifies AI when new chats arrive
+OpenClaw Integrated Chat Monitor - FIXED VERSION
+Properly detects unread messages by checking message history
 """
 
 import requests
@@ -61,24 +61,49 @@ def get_token():
         log(f"Auth error: {e}")
     return None
 
-def get_unread_chats(token):
-    url = f"https://api.digiseller.com/api/debates/v2/chats?token={token}&filter_new=1"
+def get_all_chats(token):
+    """Get ALL chats (not just unread)"""
+    url = f"https://api.digiseller.com/api/debates/v2/chats?token={token}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
-        return r.json().get("items", [])
+        return r.json().get("chats", [])
     except Exception as e:
         log(f"Fetch error: {e}")
         return []
 
-def get_chat_history(token, invoice_id):
+def get_chat_messages(token, invoice_id):
+    """Get all messages for a specific chat"""
     url = f"https://api.digiseller.com/api/debates/v2?token={token}&id_i={invoice_id}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
-        return r.json() or []
-    except:
+        result = r.json()
+        return result if isinstance(result, list) else []
+    except Exception as e:
+        log(f"Message fetch error for #{invoice_id}: {e}")
         return []
 
+def has_unread_buyer_messages(messages):
+    """Check if there are unread messages from buyer
+    buyer=1 means from buyer, date_seen=null means unread
+    """
+    for msg in messages:
+        if msg.get("buyer") == 1:  # Message from buyer
+            # If date_seen is null/None, it's unread
+            if msg.get("date_seen") is None:
+                return True
+    return False
+
+def get_last_buyer_message(messages):
+    """Get the most recent unread message from buyer"""
+    # Get unread messages from buyer
+    unread_buyer_msgs = [m for m in messages if m.get("buyer") == 1 and m.get("date_seen") is None]
+    if unread_buyer_msgs:
+        # Return the last one (most recent)
+        return unread_buyer_msgs[-1].get("message", "")
+    return ""
+
 def send_reply(token, invoice_id, text):
+    """Send a reply message to a chat"""
     url = f"https://api.digiseller.com/api/debates/v2/?token={token}&id_i={invoice_id}"
     payload = {"message": text}
     try:
@@ -100,33 +125,38 @@ def check_chats():
         log("❌ Failed to authenticate")
         return
     
-    chats = get_unread_chats(token)
+    # Get ALL chats (the filter_new=1 doesn't work properly)
+    all_chats = get_all_chats(token)
     
-    if not chats:
-        log("No new chats")
+    if not all_chats:
+        log("No chats found")
         return
     
-    log(f"Found {len(chats)} new chat(s)")
+    log(f"Checking {len(all_chats)} chat(s)...")
     
     new_items = []
+    needs_attention_count = 0
     
-    for chat in chats:
+    for chat in all_chats:
         invoice = str(chat.get("id_i"))
         product = chat.get("product", "")
         email = chat.get("email", "")
         
+        # Skip if already processed
         if invoice in state["processed"]:
             continue
         
-        # Get message history
-        history = get_chat_history(token, invoice)
-        last_message = ""
-        if history and len(history) > 0:
-            # Get the most recent message from buyer (not from seller)
-            for msg in reversed(history):
-                if msg.get("type") == "in":  # Message from buyer
-                    last_message = msg.get("message", "")
-                    break
+        # Get messages for this chat
+        messages = get_chat_messages(token, invoice)
+        
+        # Check if there are unread messages from buyer
+        if not has_unread_buyer_messages(messages):
+            continue  # No new messages from buyer, skip
+        
+        needs_attention_count += 1
+        
+        # Get the actual message content
+        last_message = get_last_buyer_message(messages)
         
         item = {
             "invoice": invoice,
@@ -142,7 +172,7 @@ def check_chats():
         
         if is_auto:
             # Auto-deliver immediately
-            log(f"⚡️ Auto-delivering to #{invoice} ({product})")
+            log(f"⚡️ Auto-delivering to #{invoice} ({product[:50]}...)")
             if send_reply(token, invoice, DELIVERY_MSG):
                 item["auto_delivered"] = True
                 item["requires_attention"] = False
@@ -173,7 +203,9 @@ def check_chats():
     save_json(QUEUE_FILE, queue)
     save_json(STATE_FILE, state)
     
-    if new_items:
+    if needs_attention_count == 0:
+        log("No new messages from buyers")
+    elif new_items:
         log(f"📋 {len(new_items)} chat(s) queued for your reply")
         # Print summary for OpenClaw to capture
         print("\n" + "="*60)
@@ -185,7 +217,7 @@ def check_chats():
             print(f"   Email: {item['email']}")
             print(f"   Message: {item['message'][:100]}{'...' if len(item['message']) > 100 else ''}")
         print("\n" + "="*60)
-        print("Reply with: chat reply <invoice_id> <your message>")
+        print("Reply with: reply to #<invoice_id> <your message>")
         print("Or run: python3 chat_cli.py")
         print("="*60 + "\n")
 
