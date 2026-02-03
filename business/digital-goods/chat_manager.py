@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Plati Chat Manager - Auto-reply and Delivery System
+Improved version with priority logic
 """
 
 import requests
@@ -30,16 +31,19 @@ PROCESSED_FILE = "delivered_orders.txt"
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 
 def load_processed():
+    """Load list of already processed order IDs"""
     if not os.path.exists(PROCESSED_FILE):
         return []
     with open(PROCESSED_FILE, "r") as f:
         return f.read().splitlines()
 
 def save_processed(invoice_id):
+    """Save order ID as processed"""
     with open(PROCESSED_FILE, "a") as f:
         f.write(f"{invoice_id}\n")
 
 def get_token():
+    """Get authentication token from Digiseller API"""
     timestamp = str(int(time.time()))
     sign = hashlib.sha256((API_KEY + timestamp).encode('utf-8')).hexdigest()
     url = "https://api.digiseller.com/api/apilogin"
@@ -53,6 +57,7 @@ def get_token():
     return None
 
 def get_unread_chats(token):
+    """Get list of unread chat conversations"""
     url = f"https://api.digiseller.com/api/debates/v2/chats?token={token}&filter_new=1"
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
@@ -61,17 +66,19 @@ def get_unread_chats(token):
         return []
 
 def get_last_message(token, invoice_id):
+    """Get the last message from a specific chat"""
     url = f"https://api.digiseller.com/api/debates/v2?token={token}&id_i={invoice_id}&newer=1"
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
         msgs = r.json()
         if msgs:
-            return msgs[0].get("message", "")  # Return newest
+            return msgs[0].get("message", "")
     except:
         pass
     return ""
 
 def send_reply(token, invoice_id, text):
+    """Send a reply message to a chat"""
     url = f"https://api.digiseller.com/api/debates/v2/?token={token}&id_i={invoice_id}"
     payload = {"message": text}
     try:
@@ -124,38 +131,43 @@ def main():
                     print(f"   Product: {product}")
                     print(f"   Email: {email}")
                     
-                    # Check if auto-delivery product
+                    # --- PRIORITY 1: AUTO-DELIVERY (Perplexity) ---
+                    # Logic: If product matches AND we haven't delivered yet
                     is_auto_product = any(auto_prod in product for auto_prod in AUTO_PRODUCTS)
                     
                     if is_auto_product and invoice not in processed:
-                        # Auto-delivery
-                        print(f"   🤖 Auto-delivery triggered!")
+                        print("⚡️ PERPLEXITY SALE DETECTED! Auto-delivering...")
                         send_reply(token, invoice, DELIVERY_MSG)
                         save_processed(invoice)
-                        print(f"   ✅ Delivery link sent!")
+                        processed.append(invoice)
+                        continue  # Skip the rest, we handled it
                     
-                    elif away_mode:
-                        # Away mode - auto-reply
-                        print(f"   🌙 Away mode - sending auto-reply...")
+                    # --- PRIORITY 2: AWAY MODE ---
+                    if away_mode:
+                        # Only send "Away" msg if we haven't already marked this chat processed
+                        print("🌙 Sending Away Message...")
                         send_reply(token, invoice, AWAY_MSG)
+                        continue
                     
+                    # --- PRIORITY 3: LIVE INTERACTION ---
+                    # Get the actual text the user sent
+                    msg_text = get_last_message(token, invoice)
+                    print(f"📩 Buyer ({email}) said: \"{msg_text}\"")
+                    
+                    reply = input(f"Type reply for #{invoice} (or Enter to skip): ")
+                    if reply.strip():
+                        send_reply(token, invoice, reply)
                     else:
-                        # Live mode - ask user for reply
-                        last_msg = get_last_message(token, invoice)
-                        print(f"\n💬 Buyer message: {last_msg}")
-                        print("-" * 60)
-                        
-                        reply = input("Your reply (or press Enter to skip): ")
-                        if reply.strip():
-                            send_reply(token, invoice, reply)
-                        else:
-                            print("   ⏭️  Skipped")
+                        print("Skipped.")
             
-            # Check every 30 seconds
-            time.sleep(30)
+            # Wait 10 seconds before next check
+            time.sleep(10)
             
     except KeyboardInterrupt:
-        print("\n\n👋 Chat manager stopped.")
+        print("\n\n🛑 Bot Stopped.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n🛑 Bot Stopped.")
