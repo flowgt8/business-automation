@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-OpenClaw Integrated Chat Monitor - FIXED VERSION
-Properly detects unread messages by checking message history
+OpenClaw Integrated Chat Monitor - OPTIMIZED VERSION
+Prioritizes recent chats and handles slow API better
 """
 
 import requests
@@ -29,7 +29,8 @@ STATE_FILE = "/root/.openclaw/workspace/business/digital-goods/chat_state.json"
 LOG_FILE = "/tmp/chat_monitor.log"
 
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
-API_TIMEOUT = 30  # Increased from 10 to 30 seconds
+API_TIMEOUT = 120  # 2 minutes per API call (Digiseller is very slow)
+MAX_CHATS_TO_CHECK = 15  # Check only 15 most recent chats (not all 20)
 
 def log(msg):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -49,16 +50,6 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-def get_processed_messages(state):
-    """Get set of processed message IDs (invoice_msgid format)"""
-    return set(state.get("processed_messages", []))
-
-def mark_message_processed(state, invoice_id, message_id):
-    """Mark a specific message as processed"""
-    if "processed_messages" not in state:
-        state["processed_messages"] = []
-    state["processed_messages"].append(f"{invoice_id}_{message_id}")
-
 def get_token():
     timestamp = str(int(time.time()))
     sign = hashlib.sha256((API_KEY + timestamp).encode('utf-8')).hexdigest()
@@ -73,11 +64,14 @@ def get_token():
     return None
 
 def get_all_chats(token):
-    """Get ALL chats (not just unread)"""
+    """Get ALL chats sorted by most recent activity"""
     url = f"https://api.digiseller.com/api/debates/v2/chats?token={token}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=API_TIMEOUT)
-        return r.json().get("chats", [])
+        chats = r.json().get("chats", [])
+        # Sort by last message date (most recent first)
+        chats.sort(key=lambda x: x.get('date_last', ''), reverse=True)
+        return chats
     except Exception as e:
         log(f"Fetch error: {e}")
         return []
@@ -94,24 +88,18 @@ def get_chat_messages(token, invoice_id):
         return []
 
 def has_unread_buyer_messages(messages):
-    """Check if there are unread messages from buyer
-    buyer=1 means from buyer, date_seen=null means unread
-    """
+    """Check if there are unread messages from buyer"""
     for msg in messages:
-        if msg.get("buyer") == 1:  # Message from buyer
-            # If date_seen is null/None, it's unread
-            if msg.get("date_seen") is None:
-                return True
+        if msg.get("buyer") == 1 and msg.get("date_seen") is None:
+            return True
     return False
 
 def get_last_buyer_message(messages):
     """Get the most recent unread message from buyer"""
-    # Get unread messages from buyer
     unread_buyer_msgs = [m for m in messages if m.get("buyer") == 1 and m.get("date_seen") is None]
     if unread_buyer_msgs:
-        # Return the last one (most recent)
-        return unread_buyer_msgs[-1].get("message", "")
-    return ""
+        return unread_buyer_msgs[-1]
+    return None
 
 def send_reply(token, invoice_id, text):
     """Send a reply message to a chat"""
@@ -120,7 +108,8 @@ def send_reply(token, invoice_id, text):
     try:
         r = requests.post(url, json=payload, headers=HEADERS, timeout=API_TIMEOUT)
         # Mark as read
-        requests.post(f"https://api.digiseller.com/api/debates/v2/seen?token={token}&id_i={invoice_id}", headers=HEADERS, timeout=API_TIMEOUT)
+        requests.post(f"https://api.digiseller.com/api/debates/v2/seen?token={token}&id_i={invoice_id}", 
+                     headers=HEADERS, timeout=API_TIMEOUT)
         return r.status_code == 200
     except Exception as e:
         log(f"Send error: {e}")
@@ -130,7 +119,7 @@ def check_chats():
     """Main monitoring function - checks for new chats and queues them"""
     state = load_json(STATE_FILE, {"processed": [], "processed_messages": [], "auto_delivered_orders": [], "away_mode": False})
     queue = load_json(QUEUE_FILE, {"pending": [], "auto_delivered": []})
-    processed_msgs = get_processed_messages(state)
+    processed_msgs = set(state.get("processed_messages", []))
     auto_delivered_orders = set(state.get("auto_delivered_orders", []))
     
     token = get_token()
@@ -138,22 +127,29 @@ def check_chats():
         log("❌ Failed to authenticate")
         return
     
-    # Get ALL chats (the filter_new=1 doesn't work properly)
+    # Get ALL chats sorted by most recent first
     all_chats = get_all_chats(token)
     
     if not all_chats:
         log("No chats found")
         return
     
-    log(f"Checking {len(all_chats)} chat(s)...")
+    # Only check the most recent N chats (prioritize recent activity)
+    chats_to_check = all_chats[:MAX_CHATS_TO_CHECK]
+    skipped = len(all_chats) - len(chats_to_check)
+    
+    log(f"Checking {len(chats_to_check)} most recent chat(s)... ({skipped} older chats skipped)")
     
     new_items = []
     needs_attention_count = 0
+    checked_count = 0
     
-    for chat in all_chats:
+    for chat in chats_to_check:
         invoice = str(chat.get("id_i"))
         product = chat.get("product", "")
         email = chat.get("email", "")
+        
+        checked_count += 1
         
         # Get messages for this chat
         messages = get_chat_messages(token, invoice)
@@ -193,8 +189,9 @@ def check_chats():
                 item["auto_delivered"] = True
                 item["requires_attention"] = False
                 queue["auto_delivered"].append(item)
-                mark_message_processed(state, invoice, last_message_id)
-                # Track that we've auto-delivered to this order
+                if "processed_messages" not in state:
+                    state["processed_messages"] = []
+                state["processed_messages"].append(f"{invoice}_{last_message_id}")
                 if "auto_delivered_orders" not in state:
                     state["auto_delivered_orders"] = []
                 state["auto_delivered_orders"].append(invoice)
@@ -211,7 +208,9 @@ def check_chats():
             log(f"🌙 Away mode reply to #{invoice}")
             if send_reply(token, invoice, AWAY_MSG):
                 item["away_reply_sent"] = True
-                mark_message_processed(state, invoice, last_message_id)
+                if "processed_messages" not in state:
+                    state["processed_messages"] = []
+                state["processed_messages"].append(f"{invoice}_{last_message_id}")
                 log(f"✅ Away reply sent to #{invoice}")
             else:
                 new_items.append(item)
@@ -219,6 +218,8 @@ def check_chats():
             # Live mode - needs human attention
             new_items.append(item)
             log(f"🔔 Queued #{invoice} for attention")
+    
+    log(f"✓ Checked {checked_count} chats")
     
     # Add new items to queue
     queue["pending"].extend(new_items)
@@ -247,7 +248,7 @@ def check_chats():
 
 def set_away_mode(enabled):
     """Toggle away mode"""
-    state = load_json(STATE_FILE, {"processed": [], "away_mode": False})
+    state = load_json(STATE_FILE, {"processed": [], "processed_messages": [], "auto_delivered_orders": [], "away_mode": False})
     state["away_mode"] = enabled
     save_json(STATE_FILE, state)
     status = "ENABLED" if enabled else "DISABLED"
@@ -260,7 +261,7 @@ def get_pending_chats():
 
 def reply_to_chat(invoice_id, message):
     """Send a reply to a specific chat"""
-    state = load_json(STATE_FILE, {"processed": [], "processed_messages": [], "away_mode": False})
+    state = load_json(STATE_FILE, {"processed": [], "processed_messages": [], "auto_delivered_orders": [], "away_mode": False})
     queue = load_json(QUEUE_FILE, {"pending": [], "auto_delivered": []})
     
     token = get_token()
@@ -276,7 +277,9 @@ def reply_to_chat(invoice_id, message):
                 break
         
         if pending_chat and "message_id" in pending_chat:
-            mark_message_processed(state, invoice_id, pending_chat["message_id"])
+            if "processed_messages" not in state:
+                state["processed_messages"] = []
+            state["processed_messages"].append(f"{invoice_id}_{pending_chat['message_id']}")
         
         # Remove from pending
         queue["pending"] = [c for c in queue["pending"] if c["invoice"] != invoice_id]

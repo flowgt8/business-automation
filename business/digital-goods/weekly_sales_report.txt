@@ -1,6 +1,5 @@
 --- Sales Report (Last 7 Days) ---
 
-[2026-01-28 11:24:21] Order #283721109 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 2.8 WMT (lorsanov@mail.ru)
 [2026-01-28 14:43:20] Order #283731937 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 2.8 WMT (nikoladr2006@gmail.com)
 [2026-01-30 15:24:41] Order #283862123 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 2.8 WMT (r0806rus@yandex.ru)
 [2026-01-30 18:57:00] Order #283878768 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 2.8 WMT (shohintima@mail.ru)
@@ -48,6 +47,6 @@
 [2026-02-03 23:42:00] Order #284187028 | Perplexity AI Pro Private Account | 1 Month | 0.5 WMT (kokomanile2@gmail.com)
 
 ---
-Total Sales: 46
-Total Revenue: 96.37999999999994 RUB
-Estimated USD: $1.01
+Total Sales: 45
+Total Revenue: 93.57999999999994 RUB
+Estimated USD: $0.99
