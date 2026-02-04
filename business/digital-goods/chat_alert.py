@@ -78,7 +78,7 @@ def check_and_alert():
         if len(recent_messages) > 5:
             message += f"<i>...and {len(recent_messages) - 5} more</i>\n\n"
         
-        message += "Reply with: reply to #<invoice> <message>"
+        message += "Reply with: reply to #&lt;invoice&gt; &lt;message&gt;"
         
         # Send Telegram alert
         success = send_telegram_message(message)

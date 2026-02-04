@@ -168,13 +168,20 @@ def check_chats():
         last_message_text = last_msg.get("message", "")
         last_message_id = last_msg.get("id")
         
+        # Use the ACTUAL message timestamp from API (date_written), not current time!
+        msg_date_written = last_msg.get("date_written", "")
+        if msg_date_written:
+            msg_timestamp = msg_date_written  # API format: "2026-02-04 00:25:45"
+        else:
+            msg_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        
         item = {
             "invoice": invoice,
             "product": product,
             "email": email,
             "message": last_message_text,
             "message_id": last_message_id,
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": msg_timestamp,  # Use API timestamp, not current time!
             "requires_attention": True
         }
         

@@ -1,12 +1,6 @@
 {
   "processed": [],
-  "processed_messages": [
-    "284187028_222050272",
-    "284187028_222050410",
-    "284187028_222051359"
-  ],
-  "auto_delivered_orders": [
-    "284187028"
-  ],
+  "processed_messages": [],
+  "auto_delivered_orders": ["284187028"],
   "away_mode": false
 }

@@ -1,33 +1,5 @@
 {
-  "pending": [
-    {
-      "invoice": "283346375",
-      "product": "Adobe Creative Cloud все приложения, 4 месяца",
-      "email": "jerzy1711@gmail.com",
-      "message": "Товар не доставлен [автосообщение].",
-      "message_id": 222070935,
-      "timestamp": "2026-02-04 09:57:15",
-      "requires_attention": true
-    },
-    {
-      "invoice": "284187028",
-      "product": "Perplexity AI Pro Private Account | 1 Month",
-      "email": "kokomanile2@gmail.com",
-      "message": "cheeeec",
-      "message_id": 222052159,
-      "timestamp": "2026-02-04 09:57:15",
-      "requires_attention": true
-    },
-    {
-      "invoice": "283191273",
-      "product": "Adobe Creative Cloud все приложения, 4 месяца",
-      "email": "media.miker@gmail.com",
-      "message": "при запуске любой программы из пакета",
-      "message_id": 222107610,
-      "timestamp": "2026-02-04 12:34:13",
-      "requires_attention": true
-    }
-  ],
+  "pending": [],
   "auto_delivered": [
     {
       "invoice": "284187028",
