@@ -30,7 +30,6 @@ LOG_FILE = "/tmp/chat_monitor.log"
 
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 API_TIMEOUT = 120  # 2 minutes per API call (Digiseller is very slow)
-MAX_CHATS_TO_CHECK = 15  # Check only 15 most recent chats (not all 20)
 
 def log(msg):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -134,22 +133,18 @@ def check_chats():
         log("No chats found")
         return
     
-    # Only check the most recent N chats (prioritize recent activity)
-    chats_to_check = all_chats[:MAX_CHATS_TO_CHECK]
-    skipped = len(all_chats) - len(chats_to_check)
+    # Check ALL chats (don't skip any - causes missed messages!)
+    chats_to_check = all_chats
     
-    log(f"Checking {len(chats_to_check)} most recent chat(s)... ({skipped} older chats skipped)")
+    log(f"Checking all {len(chats_to_check)} chat(s)...")
     
     new_items = []
     needs_attention_count = 0
-    checked_count = 0
     
     for chat in chats_to_check:
         invoice = str(chat.get("id_i"))
         product = chat.get("product", "")
         email = chat.get("email", "")
-        
-        checked_count += 1
         
         # Get messages for this chat
         messages = get_chat_messages(token, invoice)
@@ -225,8 +220,6 @@ def check_chats():
             # Live mode - needs human attention
             new_items.append(item)
             log(f"🔔 Queued #{invoice} for attention")
-    
-    log(f"✓ Checked {checked_count} chats")
     
     # Add new items to queue
     queue["pending"].extend(new_items)

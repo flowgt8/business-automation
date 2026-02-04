@@ -19,6 +19,16 @@
       "timestamp": "2026-02-03 20:55:30",
       "requires_attention": false,
       "auto_delivered": true
+    },
+    {
+      "invoice": "284253346",
+      "product": "\u041f\u0440\u0438\u0432\u0430\u0442\u043d\u044b\u0439 \u0430\u043a\u043a\u0430\u0443\u043d\u0442 Perplexity AI Pro | 1 \u043c\u0435\u0441\u044f\u0446",
+      "email": "shkurat.il98@yandex.ru",
+      "message": "\u0412\u0441\u0435 \u043f\u043e\u043b\u0443\u0447\u0438\u043b\u043e\u0441\u044c",
+      "message_id": 222168805,
+      "timestamp": "2026-02-04 23:10:05",
+      "requires_attention": false,
+      "resolved": true
     }
   ]
 }
