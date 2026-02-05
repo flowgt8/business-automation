@@ -44,8 +44,14 @@
 [2026-02-01 17:50:30] Order #284028806 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.3 WMT (kkrivoshey@internet.ru)
 [2026-02-02 21:50:13] Order #284114487 | Canva Pro 1/3/6 Months To Your Account | 0.99 WMT (piterlew022@gmail.com)
 [2026-02-03 23:42:00] Order #284187028 | Perplexity AI Pro Private Account | 1 Month | 0.5 WMT (kokomanile2@gmail.com)
+[2026-02-04 21:02:30] Order #284248736 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.1 WMT (knicolaich@gmail.com)
+[2026-02-04 21:19:01] Order #284249908 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.1 WMT (psypdd@gmail.com)
+[2026-02-04 21:21:00] Order #284250010 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.1 WMT (untv0dd@gmail.com)
+[2026-02-04 21:23:10] Order #284250178 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.1 WMT (difranc@yandex.ru)
+[2026-02-04 21:31:11] Order #284250439 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.1 WMT (amakikimura@mail.ru)
+[2026-02-04 22:06:01] Order #284253346 | Приватный аккаунт Perplexity AI Pro | 1 месяц | 1.1 WMT (shkurat.il98@yandex.ru)
 
 ---
-Total Sales: 44
-Total Revenue: 90.77999999999996 RUB
-Estimated USD: $0.96
+Total Sales: 50
+Total Revenue: 97.37999999999992 RUB
+Estimated USD: $1.03
